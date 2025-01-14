@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> chat Application</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+</head>
+
+<body class="bg-gray-100">
+
+    <div class="bg-gray-100 h-screen flex flex-col">
+        <header class="bg-white border-b border-gray-300 py-4 px-6 flex justify-between items-center">
+            <h1 class="text-2xl font-semibold text-gray-800"> chat Application</h1>
+            <button id="video-call-btn"
+                class="bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600 transition-all"> Video
+                Call</button>
+        </header>
+
+        <main class="flex-1 px-5 overflow-y-auto space-y-4 relative" id="message-container">
+            <div id="incoming-call" class=" flex hidden mt-40 z-[222]   bg-opacity-75 items-center justify-center">
+                <div class="bg-white p-8 rounded-md text-center">
+                    <p class="mb-3 text-2xl">Incoming video call...</p>
+                    <button id="accept-call" class="bg-green-500 text-white py-2 px-4 rounded-md">Accept</button>
+                    <button id="reject-call" class="bg-red-500 text-white py-2 px-4 rounded-md ml-2">Reject</button>
+                </div>
+            </div>
+
+            <div class="nodbody flex items-center justify-center h-full">
+                <p class="text-xl text-zinc-500 font-arial">Nobody here right now....</p>
+            </div>
+        </main>
+
+        <form id="message-form">
+            <footer class="bg-white border-t border-gray-300 py-3 px-4 flex items-center space-x-3">
+                <input aria-required="true" id="message" type="text" name="message" placeholder="Type your message..."
+                    class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                <button type="submit" id="send-message-btn"
+                    class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-all">Send</button>
+            </footer>
+        </form>
+
+        <div id="local-video-container"
+            class="absolute bottom-5 left-5 w-20 h-20 rounded-full border-black overflow-hidden sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40">
+            <video id="local-video" class="w-full h-full object-cover" autoplay></video>
+        </div>
+
+        <video id="remote-video" class="hidden w-full h-full object-cover" autoplay></video>
+
+        <button id="end-call-btn"
+            class="bg-red-600 text-white w-16 h-16 rounded-full flex items-center justify-center hover:bg-red-700 transition-all hidden absolute bottom-10 left-1/2 transform -translate-x-1/2 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28">
+            <span class="text-xl">End </span>
+        </button>
+    </div>
+
+    <script>
+        const socket = io();
+        let messageInput = document.querySelector("#message");
+        let room;
+        let localstream;
+        let remotestream;
+        let peerConnection;
+        const rtcsetting = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+        socket.emit("joinroom");
+
+        socket.on("joined", function (roomName) {
+            room = roomName;
+            document.querySelector(".nodbody").classList.add("hidden");
+        });
+
+        socket.on("message", function (data) {
+            if (data.sender !== socket.id) {
+                appendMessage(data.message, "received");
+            }
+        });
+
+        document.querySelector("#send-message-btn").addEventListener("click", function (event) {
+            // Prevent form submission (which could refresh the page)
+            event.preventDefault();  
+
+            const messageValue = messageInput.value.trim();
+
+            // If the message is not empty, send it
+            if (messageValue !== '') {
+                socket.emit("message", { room: room, message: messageValue });
+                appendMessage(messageValue, "sent");
+                messageInput.value = ''; // Clear the input after sending
+            } else {
+                alert('Please type a message before sending.'); // Show an alert if message is empty
+            }
+        });
+
+        socket.on("startvideocall", function () {
+            document.querySelector("#incoming-call").classList.remove("hidden");
+        });
+
+        socket.on("call-accepted", function () {
+            initialize();
+        });
+
+        document.querySelector("#video-call-btn").addEventListener("click", function () {
+            socket.emit("startvideocall", { room });
+        });
+
+        document.querySelector("#accept-call").addEventListener("click", function () {
+            document.querySelector("#incoming-call").classList.add("hidden");
+            socket.emit("acceptcall", room);
+            initialize();
+        });
+
+        document.querySelector("#reject-call").addEventListener("click", function () {
+            document.querySelector("#incoming-call").classList.add("hidden");
+            socket.emit("rejectcall", room);
+        });
+
+        document.querySelector("#end-call-btn").addEventListener("click", function () {
+            endCall();
+        });
+
+        function appendMessage(message, type) {
+            const messageContainer = document.createElement("div");
+            const messageDiv = document.createElement("div");
+            const messageText = document.createElement("p");
+
+            messageText.textContent = message;
+
+            if (type === "sent") {
+                messageContainer.classList.add('flex', 'my-5', "justify-end");
+                messageDiv.classList.add("bg-blue-500", 'text-white', "p-2", 'rounded-lg', 'max-w-xs');
+            } else {
+                messageContainer.classList.add('flex', 'my-5', "justify-start");
+                messageDiv.classList.add("bg-gray-200", 'text-black', 'p-2', 'rounded-lg', 'max-w-xs');
+            }
+            messageDiv.appendChild(messageText);
+            messageContainer.appendChild(messageDiv);
+
+            document.getElementById('message-container').appendChild(messageContainer);
+            document.querySelector("#message-container").scrollTop = document.querySelector("#message-container").scrollHeight;
+        }
+
+        const initialize = async () => {
+            socket.on("signalingmessage", handlesignalingmessage);
+            try {
+                const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true };
+                localstream = await navigator.mediaDevices.getUserMedia(constraints);
+                document.querySelector("#local-video").srcObject = localstream;
+
+                document.querySelector("footer").style.display = "none";
+                document.querySelector("header").style.display = "none";
+
+                document.querySelector("#local-video-container").style.display = "block";
+
+                document.querySelector("#remote-video").style.display = "block";  // Show remote video
+                document.querySelector("#end-call-btn").classList.remove("hidden");  // Show end call button
+
+                initiateOffer();
+            } catch (error) {
+                console.error("Error getting user media", error);
+            }
+        };
+
+        const initiateOffer = async () => {
+            createPeerConnection();
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit("signalingmessage", { room: room, message: { type: "offer", offer: offer } });
+            } catch (err) {
+                console.error("Error creating or sending offer:", err);
+            }
+        };
+
+        const createPeerConnection = () => {
+            peerConnection = new RTCPeerConnection(rtcsetting);
+            remotestream = new MediaStream();
+            document.querySelector("#remote-video").srcObject = remotestream;  // Ensure remote video gets the stream
+
+            localstream.getTracks().forEach((track) => {
+                peerConnection.addTrack(track, localstream);
+            });
+
+            peerConnection.ontrack = (event) => {
+                event.streams[0].getTracks().forEach((track) => {
+                    remotestream.addTrack(track);
+                });
+
+                document.querySelector("#remote-video").style.display = "block";  // Show remote video
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit("signalingmessage", {
+                        room: room,
+                        message: {
+                            type: "candidate",
+                            candidate: event.candidate,
+                        },
+                    });
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                console.log("Connection state changed:", peerConnection.connectionState);
+            };
+        };
+
+        const handlesignalingmessage = async (message) => {
+            try {
+                console.log("Received signaling message:", message);
+                if (typeof message === 'string') {
+                    message = JSON.parse(message);
+                }
+
+                const { type, offer, answer, candidate } = message;
+                if (type === "offer") handleoffer(offer);
+                if (type === "answer") handleanswer(answer);
+                if (type === "candidate" && peerConnection) handlecandidate(candidate);
+            } catch (error) {
+                console.error("Error parsing signaling message:", error);
+            }
+        };
+
+        const handleoffer = async (offer) => {
+            await createPeerConnection();
+            try {
+                await peerConnection.setRemoteDescription(offer);
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                socket.emit("signalingmessage", { room: room, message: { type: "answer", answer: answer } });
+            } catch (err) {
+                console.log(err);
+            }
+        };
+
+        const handleanswer = async (answer) => {
+            try {
+                await peerConnection.setRemoteDescription(answer);
+            } catch (err) {
+                console.log(err);
+            }
+        };
+
+        const handlecandidate = async (candidate) => {
+            try {
+                await peerConnection.addIceCandidate(candidate);
+            } catch (err) {
+                console.log(err);
+            }
+        };
+
+        const endCall = () => {
+            peerConnection.close();
+            peerConnection = null;
+            document.querySelector("#local-video").style.display = "none";
+            document.querySelector("#remote-video").style.display = "none";
+            document.querySelector(".nodbody").classList.remove("hidden");
+            document.querySelector("#end-call-btn").classList.add("hidden");
+            document.querySelector("footer").style.display = "flex";
+            document.querySelector("header").style.display = "flex";
+        };
+        document.querySelector("#send-message-btn").addEventListener("click", function (event) {
+    // Prevent form submission (which could refresh the page)
+    event.preventDefault();  
+
+    const messageValue = messageInput.value.trim();
+
+    // If the message is not empty, send it
+    if (messageValue !== '') {
+        socket.emit("message", { room: room, message: messageValue });
+        appendMessage(messageValue, "sent");
+        messageInput.value = ''; // Clear the input after sending
+    } else {
+           console.log("done");
+    }
+});
+
+    </script>
+</body>
+
+</html>

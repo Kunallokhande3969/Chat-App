@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Kunal's Omegle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        @keyframes bounceIn {
+            0% {
+                transform: scale(0.9) translateY(50px);
+                opacity: 0;
+            }
+            60% {
+                transform: scale(1.05) translateY(-10px);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1) translateY(0);
+            }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.8s ease-out;
+        }
+        .animate-bounceIn {
+            animation: bounceIn 1s ease-out;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-gray-800">
+    <div class="bg-white p-10 rounded-lg shadow-xl text-center w-11/12 max-w-md animate-fadeIn relative overflow-hidden">
+  
+        <div class="absolute top-0 -right-10 w-32 h-32 bg-blue-500 opacity-20 rounded-full animate-bounceIn"></div>
+        <div class="absolute bottom-0 -left-10 w-24 h-24 bg-pink-500 opacity-20 rounded-full animate-bounceIn"></div>
+
+        
+        <h1 class="text-3xl sm:text-4xl font-extrabold mb-6 text-gray-800 tracking-wide relative z-10">
+            Welcome to <br><span class="text-blue-600">Kunal's Omegle</span>
+        </h1>
+        <p class="text-gray-600 text-lg mb-8 relative z-10">
+            A place to connect, chat, and meet new people. Start now!
+        </p>
+        <a href="/chat" 
+           class="relative z-10 inline-block px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium text-lg rounded-full shadow-lg transition transform hover:scale-105 hover:shadow-2xl active:scale-95">
+            Start Chat
+        </a>
+        
+    </div>
+</body>
+
+</html>
